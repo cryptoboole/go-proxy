@@ -37,3 +37,6 @@ Thumbs.db
 
 # Env/config
 .env
+
+# Cache file
+proxy_cache.json
