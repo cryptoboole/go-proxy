@@ -360,14 +360,31 @@ func handleTestCommand() {
 				result.CountryCode = proxy.CountryCode
 				results <- result
 
-				// Update progress
+				// Update progress and print result immediately
 				progressMutex.Lock()
 				completedTests++
 				currentProgress := completedTests
 				progressMutex.Unlock()
 
-				// Show real-time progress
-				fmt.Fprintf(os.Stderr, "\rProgress: %d/%d tests completed", currentProgress, totalTests)
+				// Print each test result as it completes
+				if result.Success {
+					fmt.Printf("[%3d/%3d] ✅ %-12s - %-15s:%-5d (%-2s) - %-12s - %s\n",
+						currentProgress, totalTests,
+						result.Exchange,
+						result.ProxyAddress,
+						result.Port,
+						result.CountryCode,
+						result.ResponseTime.String(),
+						result.Data)
+				} else {
+					fmt.Printf("[%3d/%3d] ❌ %-12s - %-15s:%-5d (%-2s) - %s\n",
+						currentProgress, totalTests,
+						result.Exchange,
+						result.ProxyAddress,
+						result.Port,
+						result.CountryCode,
+						result.Error)
+				}
 			}(tester, proxy, exchangeName)
 		}
 	}
@@ -375,7 +392,7 @@ func handleTestCommand() {
 	go func() {
 		wg.Wait()
 		close(results)
-		fmt.Fprintf(os.Stderr, "\n") // New line after progress
+		fmt.Printf("\n=== All tests completed ===\n")
 	}()
 
 	var successfulTests []*exchanges.TestResult
