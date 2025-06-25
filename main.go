@@ -250,8 +250,6 @@ func handleTestCommand() {
 		return
 	}
 
-	exchangeName := os.Args[2]
-
 	// Parse command line flags
 	limit := -1 // -1 means no limit
 	for i := 3; i < len(os.Args); i++ {
@@ -287,10 +285,28 @@ func handleTestCommand() {
 
 	fmt.Printf("Testing %d proxies...\n", len(proxies))
 
-	var testers []exchanges.ExchangeTester
+	// Support multiple exchange names (e.g., if shell expands *)
+	var exchangeNames []string
+	if len(os.Args) > 3 {
+		exchangeNames = os.Args[2:]
+	} else {
+		exchangeNames = []string{os.Args[2]}
+	}
+
 	registry := exchanges.NewRegistry()
-	if exchangeName == "*" {
-		for _, name := range registry.List() {
+	availableExchanges := registry.List()
+	validExchange := func(name string) bool {
+		for _, ex := range availableExchanges {
+			if ex == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	var testers []exchanges.ExchangeTester
+	if len(exchangeNames) == 1 && exchangeNames[0] == "*" {
+		for _, name := range availableExchanges {
 			tester, err := registry.Get(name)
 			if err != nil {
 				fmt.Printf("Warning: Could not get tester for %s: %v\n", name, err)
@@ -299,16 +315,29 @@ func handleTestCommand() {
 			testers = append(testers, tester)
 		}
 	} else {
-		tester, err := registry.Get(exchangeName)
-		if err != nil {
-			fmt.Printf("Error: %v\n", err)
+		invalids := []string{}
+		for _, name := range exchangeNames {
+			if !validExchange(name) {
+				invalids = append(invalids, name)
+			}
+		}
+		if len(invalids) > 0 {
+			fmt.Printf("Error: the following are not valid exchange names: %s\n", strings.Join(invalids, ", "))
 			fmt.Println("Available exchanges:")
-			for _, name := range registry.List() {
+			for _, name := range availableExchanges {
 				fmt.Printf("  %s\n", name)
 			}
+			fmt.Println("\nNote: If you meant to test all exchanges, use quotes: ./go-proxy test \"*\"")
 			return
 		}
-		testers = append(testers, tester)
+		for _, name := range exchangeNames {
+			tester, err := registry.Get(name)
+			if err != nil {
+				fmt.Printf("Warning: Could not get tester for %s: %v\n", name, err)
+				continue
+			}
+			testers = append(testers, tester)
+		}
 	}
 
 	// Get concurrency limit from env or default to 10
